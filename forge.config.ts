@@ -17,7 +17,7 @@ const config: ForgeConfig = {
         asar: {
             unpack: '**/node_modules/{sharp,@img}/**/*',
         },
-        appBundleId: 'fun.upup.musicfree',
+        appBundleId: 'cn.xuehz.musicfree',
         icon: path.resolve(__dirname, 'res/logo'),
         executableName: 'MusicFree',
         extraResource: [path.resolve(__dirname, 'res')],
