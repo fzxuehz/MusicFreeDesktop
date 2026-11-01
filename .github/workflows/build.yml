@@ -66,13 +66,13 @@ jobs:
       - name: Verify preset in packaged app
         shell: pwsh
         run: |
-          $main_bundle = Get-ChildItem "./out/MusicFree-win32-x64/.webpack/main" -Filter *.js | Select-Object -First 5
-          $found = $false
-          foreach ($f in $main_bundle) {
-            if ((Select-String -Path $f.FullName -SimpleMatch 'xhz_preset_gd.js' -Quiet)) { $found = $true }
-          }
-          if (-not $found) { throw 'preset sources not found in packaged main bundle' }
-          Write-Host 'preset verified in package'
+          $asar = Get-ChildItem "./out/MusicFree-win32-x64/resources" -Filter app.asar -Recurse | Select-Object -First 1
+          if (-not $asar) { throw 'app.asar not found' }
+          $bytes = [System.IO.File]::ReadAllBytes($asar.FullName)
+          $text = [System.Text.Encoding]::UTF8.GetString($bytes)
+          if (-not $text.Contains('xhz_preset_gd.js')) { throw 'preset sources not found in app.asar' }
+          if (-not $text.Contains('xhz_preset_hyw.js')) { throw 'hyw preset not found in app.asar' }
+          Write-Host "preset verified in package ($($asar.FullName))"
 
       - name: Upload setup
         uses: actions/upload-artifact@v4
