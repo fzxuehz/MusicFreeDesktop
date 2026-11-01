@@ -1,211 +1,89 @@
-name: Build
+name: Build Custom Windows
 
 on:
-    workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
-    build-meta:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v5
-            - name: Generate build metadata
-              run: |
-                  VERSION=$(node -p "require('./package.json').version")
-                  BRANCH=${GITHUB_REF_NAME}
-                  COMMIT=${GITHUB_SHA}
-                  echo "{\"branch\":\"${BRANCH}\",\"version\":\"${VERSION}\",\"commit\":\"${COMMIT}\"}" > build-meta.json
-                  cat build-meta.json
-            - uses: actions/upload-artifact@v6
-              with:
-                  name: build-meta
-                  path: build-meta.json
-                  retention-days: 30
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
 
-    build-windows:
-        runs-on: windows-latest
-        steps:
-            - uses: actions/checkout@v5
-            - uses: pnpm/action-setup@v4
-              with:
-                  version: 9
-            - uses: actions/setup-node@v5
-              with:
-                  node-version: 22
-                  cache: pnpm
-            - run: pnpm install --frozen-lockfile
-            - name: Read version
-              run: |
-                  $version = node -p "require('./package.json').version"
-                  echo "VERSION=$version" >> $env:GITHUB_ENV
-            - run: pnpm run package
-            - uses: maotoumao/inno-setup-action-cli@main
-              with:
-                  filepath: ./release/build-windows.iss
-                  variables: /DMyAppVersion=${{ env.VERSION }} /DMyAppId=${{ secrets.MYAPPID }}
-            - name: Rename setup file
-              run: |
-                  Rename-Item -Path "./out/MusicFreeSetup.exe" -NewName "MusicFree-${{ env.VERSION }}-win32-x64-setup.exe"
-            - name: Generate portable
-              run: |
-                  New-Item -ItemType Directory -Path "./out/MusicFree-win32-x64/portable" -Force
-                  New-Item -ItemType File -Path "./out/MusicFree-win32-x64/portable/.portable" -Force
-            - name: Archive portable
-              run: |
-                  Compress-Archive -Path "./out/MusicFree-win32-x64/*" -DestinationPath "./out/MusicFree-${{ env.VERSION }}-win32-x64-portable.zip"
-            - uses: actions/upload-artifact@v6
-              with:
-                  name: MusicFree-${{ env.VERSION }}-win32-x64-setup
-                  path: ./out/MusicFree-${{ env.VERSION }}-win32-x64-setup.exe
-                  retention-days: 30
-            - uses: actions/upload-artifact@v6
-              with:
-                  name: MusicFree-${{ env.VERSION }}-win32-x64-portable
-                  path: ./out/MusicFree-${{ env.VERSION }}-win32-x64-portable.zip
-                  retention-days: 30
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
 
-    build-windows-legacy:
-        runs-on: windows-latest
-        steps:
-            - uses: actions/checkout@v5
-            - uses: pnpm/action-setup@v4
-              with:
-                  version: 9
-            - uses: actions/setup-node@v5
-              with:
-                  node-version: 22
-                  cache: pnpm
-            - run: pnpm install
-            - name: Read version
-              run: |
-                  $version = node -p "require('./package.json').version"
-                  echo "VERSION=$version" >> $env:GITHUB_ENV
-            - name: Override Win7 compatibility files
-              run: |
-                  Get-ChildItem -Recurse -Filter "*.win7.ts" | ForEach-Object {
-                    $target = $_.FullName -replace '\.win7\.ts$', '.ts'
-                    Write-Host "Overriding: $target"
-                    Copy-Item $_.FullName $target -Force
-                  }
-            - name: Install Electron 22
-              run: pnpm add electron@22 --save-dev
-            - run: pnpm run package
-            - uses: maotoumao/inno-setup-action-cli@main
-              with:
-                  filepath: ./release/build-windows.iss
-                  variables: /DMyAppVersion=${{ env.VERSION }} /DMyAppId=${{ secrets.MYAPPID }}
-            - name: Rename setup file
-              run: |
-                  Rename-Item -Path "./out/MusicFreeSetup.exe" -NewName "MusicFree-${{ env.VERSION }}-win32-x64-legacy-setup.exe"
-            - name: Generate portable
-              run: |
-                  New-Item -ItemType Directory -Path "./out/MusicFree-win32-x64/portable" -Force
-                  New-Item -ItemType File -Path "./out/MusicFree-win32-x64/portable/.portable" -Force
-            - name: Archive portable
-              run: |
-                  Compress-Archive -Path "./out/MusicFree-win32-x64/*" -DestinationPath "./out/MusicFree-${{ env.VERSION }}-win32-x64-legacy-portable.zip"
-            - uses: actions/upload-artifact@v6
-              with:
-                  name: MusicFree-${{ env.VERSION }}-win32-x64-legacy-setup
-                  path: ./out/MusicFree-${{ env.VERSION }}-win32-x64-legacy-setup.exe
-                  retention-days: 30
-            - uses: actions/upload-artifact@v6
-              with:
-                  name: MusicFree-${{ env.VERSION }}-win32-x64-legacy-portable
-                  path: ./out/MusicFree-${{ env.VERSION }}-win32-x64-legacy-portable.zip
-                  retention-days: 30
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
 
-    build-macos-x64:
-        runs-on: macos-15-intel
-        steps:
-            - uses: actions/checkout@v5
-            - uses: pnpm/action-setup@v4
-              with:
-                  version: 9
-            - uses: actions/setup-node@v5
-              with:
-                  node-version: 22
-                  cache: pnpm
-            - name: Fix node-gyp for Python 3.12+
-              run: pip install setuptools
-            - run: pnpm install --frozen-lockfile
-            - name: Read version
-              run: |
-                  VERSION=$(node -p "require('./package.json').version")
-                  echo "VERSION=$VERSION" >> $GITHUB_ENV
-            - run: pnpm run make
-            - name: Rename DMG
-              run: mv "./out/make/MusicFree-${{ env.VERSION }}-x64.dmg" "./out/make/MusicFree-${{ env.VERSION }}-darwin-x64.dmg"
-            - uses: actions/upload-artifact@v6
-              with:
-                  name: MusicFree-${{ env.VERSION }}-darwin-x64
-                  path: ./out/make/MusicFree-${{ env.VERSION }}-darwin-x64.dmg
-                  retention-days: 30
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-    build-macos-arm64:
-        runs-on: macos-latest
-        steps:
-            - uses: actions/checkout@v5
-            - uses: pnpm/action-setup@v4
-              with:
-                  version: 9
-            - uses: actions/setup-node@v5
-              with:
-                  node-version: 22
-                  cache: pnpm
-            - name: Fix node-gyp for Python 3.12+
-              run: pip install setuptools
-            - run: pnpm install --frozen-lockfile
-            - name: Read version
-              run: |
-                  VERSION=$(node -p "require('./package.json').version")
-                  echo "VERSION=$VERSION" >> $GITHUB_ENV
-            - run: pnpm run make -- --arch=arm64
-            - name: Rename DMG
-              run: mv "./out/make/MusicFree-${{ env.VERSION }}-arm64.dmg" "./out/make/MusicFree-${{ env.VERSION }}-darwin-arm64.dmg"
-            - uses: actions/upload-artifact@v6
-              with:
-                  name: MusicFree-${{ env.VERSION }}-darwin-arm64
-                  path: ./out/make/MusicFree-${{ env.VERSION }}-darwin-arm64.dmg
-                  retention-days: 30
+      - name: Read version
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          echo "VERSION=$version" >> $env:GITHUB_ENV
 
-    build-linux:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v5
-            - name: Install system dependencies
-              run: sudo apt-get update && sudo apt-get install -y rpm
-            - uses: pnpm/action-setup@v4
-              with:
-                  version: 9
-            - uses: actions/setup-node@v5
-              with:
-                  node-version: 22
-                  cache: pnpm
-            - run: pnpm install --frozen-lockfile
-            - name: Read version
-              run: |
-                  VERSION=$(node -p "require('./package.json').version")
-                  echo "VERSION=$VERSION" >> $GITHUB_ENV
-            - run: pnpm run make
-            - name: Rename DEB
-              run: |
-                  DEB_FILE=$(find ./out/make/deb/x64/ -name "*.deb" | head -1)
-                  if [ -n "$DEB_FILE" ]; then
-                    mv "$DEB_FILE" "./out/make/deb/x64/MusicFree-${{ env.VERSION }}-linux-amd64.deb"
-                  fi
-            - name: Rename RPM
-              run: |
-                  RPM_FILE=$(find ./out/make/rpm/x64/ -name "*.rpm" | head -1)
-                  if [ -n "$RPM_FILE" ]; then
-                    mv "$RPM_FILE" "./out/make/rpm/x64/MusicFree-${{ env.VERSION }}-linux-amd64.rpm"
-                  fi
-            - uses: actions/upload-artifact@v6
-              with:
-                  name: MusicFree-${{ env.VERSION }}-linux-amd64-deb
-                  path: ./out/make/deb/x64/MusicFree-${{ env.VERSION }}-linux-amd64.deb
-                  retention-days: 30
-            - uses: actions/upload-artifact@v6
-              with:
-                  name: MusicFree-${{ env.VERSION }}-linux-amd64-rpm
-                  path: ./out/make/rpm/x64/MusicFree-${{ env.VERSION }}-linux-amd64.rpm
-                  retention-days: 30
+      - name: Sanity check custom patches
+        shell: pwsh
+        run: |
+          if (-not (Test-Path src/infra/pluginManager/main/builtinSources.ts)) { throw 'builtinSources.ts missing' }
+          $hit1 = Select-String -Path src/infra/pluginManager/main/builtinSources.ts -SimpleMatch 'xhz_preset_gd.js'
+          if (-not $hit1) { throw 'gd preset missing' }
+          $hit2 = Select-String -Path src/infra/pluginManager/main/index.ts -SimpleMatch 'XHZ'
+          if (-not $hit2) { throw 'pm patch missing' }
+          $hit3 = Select-String -Path release/build-windows.iss -SimpleMatch 'XueHongzhong'
+          if (-not $hit3) { throw 'iss patch missing' }
+          Write-Host 'sanity check passed'
+
+      - name: Package
+        run: pnpm run package
+
+      - name: Build setup with Inno
+        uses: maotoumao/inno-setup-action-cli@main
+        with:
+          filepath: ./release/build-windows.iss
+          variables: /DMyAppVersion=${{ env.VERSION }}
+
+      - name: Rename setup file
+        shell: pwsh
+        run: |
+          Rename-Item -Path "./out/MusicFreeSetup.exe" -NewName "xhz-music-${{ env.VERSION }}-win32-x64-setup.exe"
+
+      - name: Make portable
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "./out/MusicFree-win32-x64/portable" -Force | Out-Null
+
+      - name: Archive portable
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "./out/MusicFree-win32-x64/*" -DestinationPath "./out/xhz-music-${{ env.VERSION }}-win32-x64-portable.zip"
+
+      - name: Verify preset in packaged app
+        shell: pwsh
+        run: |
+          $main_bundle = Get-ChildItem "./out/MusicFree-win32-x64/.webpack/main" -Filter *.js | Select-Object -First 5
+          $found = $false
+          foreach ($f in $main_bundle) {
+            if ((Select-String -Path $f.FullName -SimpleMatch 'xhz_preset_gd.js' -Quiet)) { $found = $true }
+          }
+          if (-not $found) { throw 'preset sources not found in packaged main bundle' }
+          Write-Host 'preset verified in package'
+
+      - name: Upload setup
+        uses: actions/upload-artifact@v4
+        with:
+          name: xhz-music-win-setup
+          path: ./out/xhz-music-${{ env.VERSION }}-win32-x64-setup.exe
+          if-no-files-found: error
+
+      - name: Upload portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: xhz-music-win-portable
+          path: ./out/xhz-music-${{ env.VERSION }}-win32-x64-portable.zip
+          if-no-files-found: error
