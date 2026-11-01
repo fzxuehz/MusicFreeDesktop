@@ -17,6 +17,7 @@ import { ipcMain } from 'electron';
 import { nanoid } from 'nanoid';
 import { compare } from 'compare-versions';
 import axios from 'axios';
+import { BUILTIN_SOURCES, BUILTIN_SOURCES_VERSION } from './builtinSources';
 import type { IWindowManager } from '@appTypes/main/windowManager';
 import type { ICallPluginMethodParams, IPluginMetaAll } from '@appTypes/infra/pluginManager';
 import {
@@ -116,6 +117,28 @@ class PluginManager {
         // 确保插件目录存在
         if (!fs.existsSync(this.pluginBasePath)) {
             fs.mkdirSync(this.pluginBasePath, { recursive: true });
+        }
+
+        // ==== 薛鸿忠音乐：内置音源插件（首启写入插件目录，用户可在插件管理中卸载）====
+        try {
+            const presetMarker = path.join(userDataPath, 'xhz-preset-v' + BUILTIN_SOURCES_VERSION + '.done');
+            if (!fs.existsSync(presetMarker)) {
+                for (const presetPlugin of BUILTIN_SOURCES) {
+                    const target = path.join(this.pluginBasePath, presetPlugin.filename);
+                    try {
+                        if (fs.existsSync(target)) continue;
+                        fs.writeFileSync(target, presetPlugin.code, 'utf8');
+                    } catch (e) {
+                        console.error('[XHZ] preset write failed:', presetPlugin.filename, e);
+                    }
+                }
+                try {
+                    fs.writeFileSync(presetMarker, String(Date.now()), 'utf8');
+                } catch {}
+                console.log('[XHZ] preset sources installed');
+            }
+        } catch (e) {
+            console.error('[XHZ] preset sources setup failed', e);
         }
 
         // 初始化插件存储
